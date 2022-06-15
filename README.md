@@ -6,7 +6,7 @@ https://openaccess.thecvf.com/content/ICCV2021/papers/Li_Perceptual_Variousness_
 
 ### model architecture
 
-![Untitled](%E1%84%89%E1%85%A6%E1%84%86%E1%85%B5%E1%84%82%E1%85%A1%20%E1%84%87%E1%85%A1%E1%86%AF%E1%84%91%E1%85%AD%203f2867c58cf2469e9feec0f30a446ade/Untitled.png)
+![image](https://user-images.githubusercontent.com/70565663/173803742-8c2a2398-d154-48f5-aeb7-b43c8f2ecedd.png)  
 
 ### Train
 
