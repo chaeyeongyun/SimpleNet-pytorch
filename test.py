@@ -98,8 +98,6 @@ if __name__ == '__main__':
     parser.add_argument('--save_img', type=bool, default=True, help='save result images')
     parser.add_argument('--save_txt', type=bool, default=True, help='save training process as txt file')
     parser.add_argument('--gpu', type=str, default='0', help='gpu number. -1 is cpu')
-    ##############
-    parser.add_argument('--model', type=str, default='Full_FPWRN', help='modelname')
     
     opt = parser.parse_args()
     
