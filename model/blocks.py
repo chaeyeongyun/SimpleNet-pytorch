@@ -110,37 +110,11 @@ class CALayer(nn.Module):
         ca = torch.sigmoid(pooling_sum)
         output = x * ca
         return output
-    
-## WRCAB : Wide Receptive Field Channels Attention Block
-class WRCAB(nn.Module):
-    """
-    WRCAB : Wide Receptive Field Channels Attention Block
-    After passing through convlayers with multiple dilate rates in parallel, process them by concatting them
-    Finally, apply channel attention 
-    """
-    def __init__(self, in_channels, out_channels, atrous_rate:List[int]=[1, 2, 3, 4], act=nn.ReLU()):
-        super().__init__()
-        atrous_convs = []
-        for rate in atrous_rate:
-            atrous_convs += [BasicConv(in_channels, in_channels//2, kernel_size=3, padding=rate, batch_norm=True, act=act, dilation=rate)]
-        self.atrous_convs = nn.ModuleList(atrous_convs)
-        # self.project = BasicConv(len(atrous_convs)*(in_channels//2), out_channels, kernel_size=3, padding=1, bias=False, batch_norm=True, act=act)
-        self.project = nn.Conv2d(len(atrous_convs)*(in_channels//2), out_channels, kernel_size=3, padding=1, bias=False)
-        self.ca = CALayer(out_channels, out_channels//4, only_GAP=True)
-        
-    def forward(self, x):
-        atrous_results = []
-        for atrous in self.atrous_convs:
-            atrous_results += [atrous(x)]
-        atrous_out = torch.cat(tuple(atrous_results), dim=1)
-        project = self.project(atrous_out)
-        ca_out = self.ca(project)
-        output = x + ca_out
-        return output
+
 
 ## PVB
 class PVB(nn.Module):
-    def __init__(self, in_channels, out_channels, atrous_rates:List[int]=[1, 2, 3], act=nn.ReLU()):
+    def __init__(self, in_channels, atrous_rates:List[int]=[1, 2, 3], act=nn.ReLU()):
         super().__init__()
         modules = []
         for rate in atrous_rates:
@@ -149,7 +123,7 @@ class PVB(nn.Module):
                                   nn.BatchNorm2d(in_channels//2),
                                   act)]
         self.convlist = nn.ModuleList(modules)
-        self.project = DeformableConv2d(len(self.convlist)*in_channels//2, out_channels, kernel_size=3, padding=1 )
+        self.project = DeformableConv2d(len(self.convlist)*in_channels//2, in_channels, kernel_size=3, padding=1)
         
     def forward(self, x):
         conv_results = []
@@ -171,31 +145,48 @@ class LGCR(nn.Module):
                                       nn.PReLU())
         self.conv1d_h = nn.Sequential(nn.Conv1d(1, cp_rank, 3, padding=1, bias=False),
                                       nn.PReLU())
+        self.conv3d = nn.Conv3d(1, 1, 3, padding=1, bias=False)
     
     def forward(self, x):
+        # x.shape = (N, C, H, W)
+        xshape = x.shape
+        ### CPtensor reconstuction
         #GAP_C
         gap_c = (F.adaptive_avg_pool2d(x, 1)).squeeze(dim=-1) # (N, C, 1, 1) (N, C, 1)
         c_out = torch.swapaxes(self.conv1d_c(torch.swapaxes(gap_c, -1, -2)), -1, -2) # (N, C, 1)->(N, 1, C)->(N, 64, C)->(N, C, r)
-        c_out = c_out.unsqueeze(dim=-1) # (N, C, r, 1)
+        sp_c_out = torch.split(c_out, 1, dim=-1) # [(N, C, 1) x r]
         #GAP_W
         gap_w = torch.mean(torch.mean(x, dim=1, keepdim=True), dim=2) # (N, 1, W)
         w_out = self.conv1d_w(gap_w) # (N, r, W)
-        w_out = w_out.unsqueeze(dim=-2) # ( N, r, 1, W )
         #GAP_H
         gap_h = torch.mean(torch.mean(x, dim=1, keepdim=True), dim=3) # (N, 1, H)
-        h_out = self.conv1d_h(gap_h) # (N, r, H)
-        h_out = h_out.unsqueeze(dim=-1) # (N, r, H, 1)
-        a=1
+        h_out = torch.swapaxes(self.conv1d_h(gap_h), -1, -2) # (N, r, H) (N, H, r)
+        sp_h_out, sp_w_out = torch.split(h_out, 1, dim=-1), torch.split(w_out, 1, dim=1) # [(N, H, 1)xr] [(N, 1, W)xr]
+        
+        l = [torch.einsum('bij, bjk -> bik', sp_h, sp_w).unsqueeze(1) for sp_h, sp_w in zip(sp_h_out, sp_w_out)] # [(N, 1, H, W) x r]
+        HW64 = torch.cat(tuple(l), dim=1) # (N, r, H, W)
+        HW64 = HW64.view((HW64.shape[0], HW64.shape[1], HW64.shape[2]*HW64.shape[3])) # (N, r, HxW)
+        sp_HW64 = torch.split(HW64, 1, dim=1) # [(N, 1, HxW) x r]
+        l = [torch.einsum('bij, bjk -> bik', sp_c, sp_hw).view(xshape).unsqueeze(dim=0) for sp_c, sp_hw in zip(sp_c_out, sp_HW64)] # (N, C, HxW) ->(N, C, H, W)->(1, N, C, H, W)x64
+        cat = torch.cat(tuple(l), dim=0) # (r, N, C, H, W)
+        cp_out = torch.sum(cat, dim=0) # (N, C, H, W)
+        GCRW = F.softmax(cp_out, dim=1)
+        
+        ## Raw Residual
+        raw_residual = self.conv3d(x.unsqueeze(dim=1)) # (N, 1, C, H, W) -> (N, 1, C, H, W)
+        raw_residual = raw_residual.squeeze(dim=1) # (N, C, H, W)
+        
+        output = torch.mul(raw_residual, GCRW) + x
+        return output
         
 
 
 ## Decoder
 class DecoderBlock(nn.Sequential):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels):
         modules = [ResidualBlock(in_channels, in_channels),
-                   nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=True),
-                   WRCAB(out_channels, out_channels),
-                   Deformable_Resblock(out_channels, out_channels, kernel_size=3, padding=1, bias=True, batch_norm=True)]
+                   PVB(in_channels),
+                   Deformable_Resblock(in_channels, in_channels, kernel_size=3, padding=1, bias=True, batch_norm=True)]
         super().__init__(*modules)
 
 class Decoder(nn.Module):
@@ -228,6 +219,6 @@ class Decoder(nn.Module):
         return output
 
 if __name__ == '__main__':
-    input = torch.randn((2, 256, 256, 256))
+    input = torch.randn((2, 256, 64, 64))
     lgcr = LGCR()
     lgcr(input)
