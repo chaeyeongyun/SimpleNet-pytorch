@@ -253,7 +253,6 @@ class Trainer():
         
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='./config/CWFID_train_config.yaml', help='yaml file that has configuration for train')
     parser.add_argument('--save_img', type=bool, default=True, help='save result images')
     parser.add_argument('--save_txt', type=bool, default=True, help='save training process as txt file')
     parser.add_argument('--save_csv', type=bool, default=True, help='save training process as csv file')
