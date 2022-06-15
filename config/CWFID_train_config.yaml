@@ -1,0 +1,15 @@
+GPU: '0' # -1 is CPU
+
+BATCH_SIZE : 2
+NUM_EPOCHS : 20
+
+OPTIM:
+  LR_INIT: 1e-4
+
+# data
+DATA_DIR : '../blur_cropweed/CWFID/MPR'
+SAVE_DIR : './train/CWFID'
+PATCHSIZE : 256
+
+# resume training
+LOAD_WEIGHTS : ''
