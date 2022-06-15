@@ -1,6 +1,4 @@
-from asyncio import base_tasks
 from typing import List
-from pyparsing import Forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -179,6 +177,50 @@ class LGCR(nn.Module):
         
         output = torch.mul(raw_residual, GCRW) + x
         return output
+    
+## LGCR : Light Global Context Refinement
+# class LGCR_ver2(nn.Module):
+#     def __init__(self, cp_rank=64):
+#         super().__init__()
+#         # cp_rank is r in paper
+#         self.conv1d_c = nn.Sequential(nn.Conv1d(1, cp_rank, 3, padding=1, bias=False),
+#                                       nn.PReLU())
+#         self.conv1d_w = nn.Sequential(nn.Conv1d(1, cp_rank, 3, padding=1, bias=False),
+#                                       nn.PReLU())
+#         self.conv1d_h = nn.Sequential(nn.Conv1d(1, cp_rank, 3, padding=1, bias=False),
+#                                       nn.PReLU())
+#         self.conv3d = nn.Conv3d(1, 1, 3, padding=1, bias=False)
+    
+#     def forward(self, x):
+#         # x.shape = (N, C, H, W)
+#         xshape = x.shape
+#         ### CPtensor reconstuction
+#         #GAP_C
+#         gap_c = (F.adaptive_avg_pool2d(x, 1)).squeeze(dim=-1) # (N, C, 1, 1) (N, C, 1)
+#         c_out = torch.swapaxes(self.conv1d_c(torch.swapaxes(gap_c, -1, -2)), -1, -2) # (N, C, 1)->(N, 1, C)->(N, 64, C)->(N, C, r)
+        
+#         #GAP_W
+#         gap_w = torch.mean(torch.mean(x, dim=1, keepdim=True), dim=2) # (N, 1, W)
+#         w_out = self.conv1d_w(gap_w) # (N, r, W)
+#         w_out = w_out.unsqueeze(dim=-2) # (N, r, 1, W)
+#         #GAP_H
+#         gap_h = torch.mean(torch.mean(x, dim=1, keepdim=True), dim=3) # (N, 1, H)
+#         h_out = self.conv1d_h(gap_h) # (N, r, H) 
+#         h_out = h_out.unsqueeze(dim=-1) # (N, r, H, 1)
+        
+#         nrhw = torch.einsum('bchi, bciw -> bchw', h_out, w_out) # (N, r, H, W)
+#         # nrhw = torch.flatten(nrhw, start_dim=-2) # (N, r, HxW)
+#         nchw = torch.einsum('bcr, brhw -> brchw', c_out, nrhw) # (N, r, C, H, W)
+#         nchw = torch.sum(nchw, dim=1) # (N, C, H, W)
+#         GCRW = F.softmax(nchw, dim=1)
+        
+#         ## Raw Residual
+#         raw_residual = self.conv3d(x.unsqueeze(dim=1)) # (N, 1, C, H, W) -> (N, 1, C, H, W)
+#         raw_residual = raw_residual.squeeze(dim=1) # (N, C, H, W)
+        
+#         output = torch.mul(raw_residual, GCRW) + x
+#         return output    
+
 ## Encoder
 class EncoderBlock(nn.Sequential):
     def __init__(self, in_channels):
@@ -221,7 +263,7 @@ class Decoder(nn.Module):
         
         self.dec_block_3 = DecoderBlock(enc_out_channels*2)
 
-        self.last_conv = nn.Sequential(BasicConv(enc_out_channels*2, 3, kernel_size=3, padding=1, bias=True, batch_norm=True))
+        self.last_conv = nn.Sequential(BasicConv(enc_out_channels*2, 3, kernel_size=3, padding=1, bias=True, batch_norm=False))
     
     def forward(self, lgcr_out, skip1, skip2):
         dec1 = self.dec_block_1(lgcr_out)
@@ -250,7 +292,13 @@ class SimpleNet(nn.Module):
         
 
 
-if __name__ == '__main__':
-    input = torch.randn((2, 3 ,256, 256))
-    model = SimpleNet(3)
-    out = model(input)
+# if __name__ == '__main__':
+    # from PIL import Image
+    # import torchvision
+    # input = Image.open('/data/output.png')
+    # input = torchvision.transforms.functional.to_tensor(input)
+    # input = input.unsqueeze(dim=0)
+    # input = torch.randn((2, 3, 3, 3))
+    # lgcr1 = LGCR()
+    # lgcr2 = LGCR_ver2()
+    # print(lgcr1(input)==lgcr2(input))
