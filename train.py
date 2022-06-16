@@ -32,10 +32,10 @@ class Trainer():
         self.start_epoch = 0
         self.num_epochs = cfg['NUM_EPOCHS']
         
-        # train_dataset = CropDataset(os.path.join(cfg['DATA_DIR'], 'train'), cfg['PATCHSIZE'])
-        train_dataset = FullDataset(os.path.join(cfg['DATA_DIR'], 'patch_train'))
-        # val_dataset = CropDataset(os.path.join(cfg['DATA_DIR'], 'val'), cfg['PATCHSIZE'])
-        val_dataset = FullDataset(os.path.join(cfg['DATA_DIR'], 'patch_val'))
+        train_dataset = CropDataset(os.path.join(cfg['DATA_DIR'], 'patch_train'), cfg['PATCHSIZE'])
+        # train_dataset = FullDataset(os.path.join(cfg['DATA_DIR'], 'patch_train'))
+        val_dataset = CropDataset(os.path.join(cfg['DATA_DIR'], 'patch_val'), cfg['PATCHSIZE'])
+        # val_dataset = FullDataset(os.path.join(cfg['DATA_DIR'], 'patch_val'))
         
         self.trainloader = DataLoader(train_dataset, cfg['BATCH_SIZE'], shuffle=True)
         self.valloader = DataLoader(val_dataset, 1, shuffle=False)
@@ -119,6 +119,7 @@ class Trainer():
                     # self.save_checkpoint(epoch, f'{epoch}ep-{step}step.pth')
                 # learning rate scheduler step
                 self.lr_scheduler.step()
+                print('lr :', self.lr_scheduler.get_last_lr())
                 
             
             # train loss
@@ -171,7 +172,7 @@ class Trainer():
             input_img, target_img = input_img.to(self.device), target_img.to(self.device)
             
             with torch.no_grad():
-                restored, _ = self.model(input_img)
+                restored = self.model(input_img)
             
             # [-1, 1] to [0, 1]
             restored_cpu, target_cpu = restored.detach().cpu(), target_img.detach().cpu()
