@@ -7,6 +7,7 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
 
 import torch
 import torch.nn as nn
@@ -42,7 +43,7 @@ class Trainer():
         self.optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg['OPTIM']['LR_INIT']), betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001, amsgrad=False)
         
         self.loss = nn.L1Loss()
-        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=8, gamma=0.1)
+        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=630, gamma=1/math.sqrt(10))
         
         # if resume
         if cfg['LOAD_WEIGHTS'] != '':
@@ -116,6 +117,9 @@ class Trainer():
                     self.val_test(epoch, opt)
                     torch.cuda.empty_cache()
                     # self.save_checkpoint(epoch, f'{epoch}ep-{step}step.pth')
+                # learning rate scheduler step
+                self.lr_scheduler.step()
+                
             
             # train loss
             epoch_loss /= trainloader_len
@@ -130,9 +134,7 @@ class Trainer():
                 ssim_list += [epoch_ssim]
                 lr_list += [self.optimizer.param_groups[0]['lr']]
             
-            # learning rate scheduler step
-            self.lr_scheduler.step()
-                
+           
             traintxt = f"[epoch {epoch} Loss: {epoch_loss:.4f}, LearningRate :{self.optimizer.param_groups[0]['lr']:.6f}, trainPSNR: {epoch_psnr:.4f}, trainSSIM: {epoch_ssim:.4f}], time: {(time.time()-ep_start):.4f} sec \n" 
                 # % (epoch, epoch_loss, self.lr_scheduler.get_last_lr()[0], epoch_psnr, epoch_ssim, time.time()-ep_start)
             print(traintxt)
