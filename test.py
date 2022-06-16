@@ -58,13 +58,6 @@ def test(model, opt):
     for input_img, target_img, filename in tqdm(testloader):
         input_img, target_img = input_img.to(device), target_img.to(device)
         orgh, orgw = input_img.shape[2:]
-        if opt.data_dir.split('/')[-3] in ['IJRR2017', 'CWFID', 'rice_s_n_w']:
-            factor = 32
-            h,w = input_img.shape[2], input_img.shape[3]
-            H,W = ((h+factor)//factor)*factor, ((w+factor)//factor)*factor
-            padh = H-h if h%factor!=0 else 0
-            padw = W-w if w%factor!=0 else 0
-            input_img = F.pad(input_img, (0,padw,0,padh), 'reflect')
         
         with torch.no_grad():
             restored = model(input_img)
