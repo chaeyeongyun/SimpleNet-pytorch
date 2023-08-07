@@ -1,4 +1,4 @@
-# SimpleNet-pytorch
+# SimpleNet-pytorch Unofficial code implementation
 Li, Jichun, Weimin Tan, and Bo Yan. "Perceptual variousness motion deblurring with light global context refinement." Proceedings of the IEEE/CVF International Conference on Computer Vision. 2021. Pytorch *unofficial* Implementation  
 https://openaccess.thecvf.com/content/ICCV2021/papers/Li_Perceptual_Variousness_Motion_Deblurring_With_Light_Global_Context_Refinement_ICCV_2021_paper.pdf
 
